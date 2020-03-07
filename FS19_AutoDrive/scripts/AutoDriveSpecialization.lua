@@ -358,6 +358,7 @@ function AutoDrive:onWriteStream(streamId, connection)
         end
     end
     streamWriteUInt8(streamId, self.ad.targetSpeed)
+    streamWriteUIntN(streamId, self.ad.parkDestination or 0, 20)
 end
 
 function AutoDrive:onReadStream(streamId, connection)
@@ -367,6 +368,7 @@ function AutoDrive:onReadStream(streamId, connection)
         end
     end
     self.ad.targetSpeed = streamReadUInt8(streamId)
+    self.ad.parkDestination = streamReadUIntN(streamId, 20)
 end
 
 function AutoDrive:onUpdate(dt)
@@ -555,7 +557,7 @@ function AutoDrive:onDraw()
             local sWP = self.ad.wayPoints[self.ad.currentWayPoint]
             local eWP = self.ad.wayPoints[self.ad.currentWayPoint + 1]
             AutoDriveDrawingManager:addLineTask(sWP.x, sWP.y, sWP.z, eWP.x, eWP.y, eWP.z, 1, 1, 1)
-            AutoDriveDrawingManager:addArrowTask(sWP.x, sWP.y, sWP.z, eWP.x, eWP.y, eWP.z, 1, 1, 1)
+            AutoDriveDrawingManager:addArrowTask(sWP.x, sWP.y, sWP.z, eWP.x, eWP.y, eWP.z, AutoDriveDrawingManager.arrows.position.start, 1, 1, 1)
         end
     end
 
@@ -574,15 +576,6 @@ function AutoDrive:onDraw()
 end
 
 function AutoDrive:onDrawControlledVehicle(vehicle)
-    if AutoDrive.print.currentMessage ~= nil then
-        local adFontSize = 0.016
-        local adPosX = 0.5
-        local adPosY = 0.14
-        setTextColor(1, 1, 0, 1)
-        setTextAlignment(RenderText.ALIGN_CENTER)
-        renderText(adPosX, adPosY, adFontSize, AutoDrive.print.currentMessage)
-    end
-
     if AutoDrive.Hud ~= nil then
         if AutoDrive.Hud.showHud == true then
             AutoDrive.Hud:drawHud(vehicle)
@@ -609,10 +602,8 @@ function AutoDrive:onDrawCreationMode(vehicle)
         local wp = AutoDrive.mapWayPoints[marker.id]
         if AutoDrive.getDistance(wp.x, wp.z, x1, z1) < maxDistance then
             Utils.renderTextAtWorldPosition(wp.x, wp.y + 4, wp.z, marker.name, getCorrectTextSize(0.013), 0)
-            if AutoDrive.getSettingState("lineHeight") <= 1 and not vehicle.ad.extendedEditorMode then
-                AutoDriveDM:addSphereTask(wp.x, wp.y + 0.1, wp.z, 1, 1, 0, 0, 0)
-                AutoDriveDM:addSphereTask(wp.x, wp.y + 0.25, wp.z, 1.5, 1, 0, 0, 0)
-                AutoDriveDM:addSphereTask(wp.x, wp.y + 0.45, wp.z, 2, 1, 0, 0, 0)
+            if not vehicle.ad.extendedEditorMode then
+                AutoDriveDM:addMarkerTask(wp.x, wp.y + 0.45, wp.z)
             end
         end
     end
@@ -683,6 +674,7 @@ end
 
 function AutoDrive.drawPointsInProximity(vehicle)
     local AutoDriveDM = AutoDriveDrawingManager
+    local arrowPosition = AutoDriveDM.arrows.position.start
     AutoDrive.getNewPointsInProximity(vehicle)
 
     for _, point in pairs(vehicle.ad.pointsInProximity) do
@@ -690,6 +682,7 @@ function AutoDrive.drawPointsInProximity(vehicle)
         local y = point.y
         local z = point.z
         if vehicle.ad.extendedEditorMode then
+            arrowPosition = AutoDriveDM.arrows.position.middle
             if AutoDrive.mouseIsAtPos(point, 0.01) then
                 AutoDriveDM:addSphereTask(x, y, z, 3, 0, 0, 1, 0.3)
             else
@@ -729,7 +722,7 @@ function AutoDrive.drawPointsInProximity(vehicle)
                     else
                         --draw line with direction markers (arrow)
                         AutoDriveDM:addLineTask(x, y, z, nWp.x, nWp.y, nWp.z, 0, 1, 0)
-                        AutoDriveDM:addArrowTask(x, y, z, nWp.x, nWp.y, nWp.z, 0, 1, 0)
+                        AutoDriveDM:addArrowTask(x, y, z, nWp.x, nWp.y, nWp.z, arrowPosition, 0, 1, 0)
                     end
                 end
             end
@@ -740,7 +733,7 @@ function AutoDrive.drawPointsInProximity(vehicle)
             if (#point.out == 0) and (#point.incoming == 0) then
                 AutoDriveDM:addSphereTask(x, y, z, 1.5, 1, 0, 0, 0.1)
             else
-                AutoDriveDM:addSmallSphereTask(x, y, z, 1, 0, 0)
+                --AutoDriveDM:addSmallSphereTask(x, y, z, 1, 0, 0)
             end
         end
     end
