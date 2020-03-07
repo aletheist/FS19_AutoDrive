@@ -21,13 +21,22 @@ AutoDrivePathFinder = {}
 
 AutoDrive.PATHFINDER_MAX_RETRIES = 3
 
+function AutoDrive.sign(x)
+    if x<0 then
+      return -1
+    elseif x>0 then
+      return 1
+    else
+      return 0
+    end
+ end
+
 function AutoDrivePathFinder:startPathPlanningToCombine(driver, combine, dischargeNode, alreadyOnField)
     --g_logManager:devInfo("startPathPlanningToCombine " .. driver.ad.driverName );
-    local _, worldY, _ = getWorldTranslation(combine.components[1].node)
+    local worldX, worldY, worldZ = getWorldTranslation(combine.components[1].node)
     local rx, _, rz = localDirectionToWorld(combine.components[1].node, 0, 0, 1)
     local combineVector = {x = rx, z = rz}
     local combineNormalVector = {x = -combineVector.z, z = combineVector.x}
-
     local wpAhead
     local wpCurrent
     local wpBehind_close
@@ -60,8 +69,27 @@ function AutoDrivePathFinder:startPathPlanningToCombine(driver, combine, dischar
         wpBehind = {x = pipeChasePos.x - AutoDrive.PATHFINDER_TARGET_DISTANCE * rx, y = pipeChasePos.y, z = pipeChasePos.z - AutoDrive.PATHFINDER_TARGET_DISTANCE * rz}
         driver.ad.waitForPreDriveTimer = 10000
     else
-        local nodeX, _, nodeZ = getWorldTranslation(dischargeNode)
+        local nodeX, nodeY, nodeZ = getWorldTranslation(dischargeNode)
+        local heightUnderCombine = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, worldX, worldY, worldZ)
+        g_logManager:info("heightUnderCombine: " .. heightUnderCombine);
+        local heightUnderPipe = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, nodeX, nodeY, nodeZ)
+        g_logManager:info("heightUnderPip: " .. heightUnderPipe);
+
+        -- want this to be negative if the ground is lower under the pipe
+        local dh = heightUnderPipe - heightUnderCombine
+        g_logManager:info("dh: " .. dh);
+        local _, _, _, hyp = AutoDrive.getWorldDirection(worldX, heightUnderCombine, worldZ, nodeX, heightUnderPipe, nodeZ)
+        g_logManager:info("hyp: " .. hyp);
+        local run = math.sqrt(hyp * hyp - dh * dh)
+        g_logManager:info("run: " .. run);
+        local theta = math.asin(dh/hyp)
+        g_logManager:info("theta: " .. theta);
+        g_logManager:info("nodeY: " .. nodeY);
+        local elevationCorrection = run - (run * math.cos(theta) + (nodeY - heightUnderPipe) * math.sin(theta))
+        g_logManager:info("elevationCorrection: " .. elevationCorrection);
+
         local pipeOffset = AutoDrive.getSetting("pipeOffset", driver)
+        pipeOffset = pipeOffset + elevationCorrection
         local trailerOffset = AutoDrive.getSetting("trailerOffset", driver)
         local lengthOffset = 5 + driver.sizeLength / 2
         if firstBinIsOnDriver then
@@ -69,12 +97,12 @@ function AutoDrivePathFinder:startPathPlanningToCombine(driver, combine, dischar
         end
 
         if lengthOffset ~= 0 or trailerOffset ~= 0 then
-            wpAhead = {x = (nodeX + (lengthOffset + trailerOffset) * rx) - pipeOffset * combineNormalVector.x, y = worldY, z = nodeZ + (lengthOffset + trailerOffset) * rz - pipeOffset * combineNormalVector.z}
+            wpAhead = {x = (nodeX + (lengthOffset + trailerOffset) * rx) - pipeOffset * combineNormalVector.x, y = nodeY, z = nodeZ + (lengthOffset + trailerOffset) * rz - pipeOffset * combineNormalVector.z}
         end
-        wpCurrent = {x = (nodeX - pipeOffset * combineNormalVector.x), y = worldY, z = nodeZ - pipeOffset * combineNormalVector.z}
-        wpBehind_close = {x = (nodeX - AutoDrive.PATHFINDER_TARGET_DISTANCE_PIPE_CLOSE * rx - pipeOffset * combineNormalVector.x), y = worldY, z = nodeZ - AutoDrive.PATHFINDER_TARGET_DISTANCE_PIPE_CLOSE * rz - pipeOffset * combineNormalVector.z}
+        wpCurrent = {x = (nodeX - pipeOffset * combineNormalVector.x), y = nodeY, z = nodeZ - pipeOffset * combineNormalVector.z}
+        wpBehind_close = {x = (nodeX - AutoDrive.PATHFINDER_TARGET_DISTANCE_PIPE_CLOSE * rx - pipeOffset * combineNormalVector.x), y = nodeY, z = nodeZ - AutoDrive.PATHFINDER_TARGET_DISTANCE_PIPE_CLOSE * rz - pipeOffset * combineNormalVector.z}
 
-        wpBehind = {x = (nodeX - AutoDrive.PATHFINDER_TARGET_DISTANCE_PIPE * rx - pipeOffset * combineNormalVector.x), y = worldY, z = nodeZ - AutoDrive.PATHFINDER_TARGET_DISTANCE_PIPE * rz - pipeOffset * combineNormalVector.z} --make this target
+        wpBehind = {x = (nodeX - (lengthOffset + trailerOffset + AutoDrive.PATHFINDER_TARGET_DISTANCE_PIPE) * rx - pipeOffset * combineNormalVector.x), y = nodeY, z = nodeZ - (lengthOffset + trailerOffset + AutoDrive.PATHFINDER_TARGET_DISTANCE_PIPE) * rz - pipeOffset * combineNormalVector.z} --make this target
     end
 
     local driverWorldX, driverWorldY, driverWorldZ = getWorldTranslation(driver.components[1].node)
