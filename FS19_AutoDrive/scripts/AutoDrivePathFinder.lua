@@ -73,7 +73,7 @@ function AutoDrivePathFinder:startPathPlanningToCombine(driver, combine, dischar
         local heightUnderCombine = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, worldX, worldY, worldZ)
         g_logManager:info("heightUnderCombine: " .. heightUnderCombine);
         local heightUnderPipe = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, nodeX, nodeY, nodeZ)
-        g_logManager:info("heightUnderPip: " .. heightUnderPipe);
+        g_logManager:info("heightUnderPipe: " .. heightUnderPipe);
 
         -- want this to be negative if the ground is lower under the pipe
         local dh = heightUnderPipe - heightUnderCombine
@@ -85,11 +85,14 @@ function AutoDrivePathFinder:startPathPlanningToCombine(driver, combine, dischar
         local theta = math.asin(dh/hyp)
         g_logManager:info("theta: " .. theta);
         g_logManager:info("nodeY: " .. nodeY);
-        local elevationCorrection = run - (run * math.cos(theta) + (nodeY - heightUnderPipe) * math.sin(theta))
+        local elevationCorrection = (run * math.cos(theta) + (nodeY - heightUnderPipe) * math.sin(theta)) - run
         g_logManager:info("elevationCorrection: " .. elevationCorrection);
 
         local pipeOffset = AutoDrive.getSetting("pipeOffset", driver)
-        pipeOffset = pipeOffset + elevationCorrection
+        -- This assumes the only reason one would have a negative pipe offset 
+        -- is because the pipe is on the right side. This may be an unsafe
+        -- assumption.
+        pipeOffset = pipeOffset + elevationCorrection * AutoDrive.sign(pipeOffset)
         local trailerOffset = AutoDrive.getSetting("trailerOffset", driver)
         local lengthOffset = 5 + driver.sizeLength / 2
         if firstBinIsOnDriver then
